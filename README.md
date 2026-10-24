@@ -1,5 +1,7 @@
 # ProofReceipt Checkout — PayPal AI Hackathon entry (scaffold)
 
+**Live demo:** https://proofreceipt-checkout.netlify.app — **Repo:** https://github.com/Nenzy10/proofreceipt-checkout
+
 **One-line pitch:** Payment rails are solved; proof of delivery isn't. ProofReceipt
 Checkout binds a client-side SHA-256 receipt of the deliverable into the PayPal
 checkout itself — the buyer sees the receipt hash, verifies it against the file
@@ -78,7 +80,7 @@ Flow:
    and validates the receipt fingerprint (a tampered receipt disables
    payment). The PayPal buttons stay locked until the buyer ticks "I verified
    the SHA-256 hash matches the deliverable I received." Buttons are rendered
-   by the PayPal JS SDK (sandbox demo mode) and create an order whose
+   by the PayPal JS SDK (sandbox mode, real sandbox app) and create an order whose
    `custom_id` is the receipt ID — the payment record itself carries the proof.
 3. **Verify (verify.html).** Anyone can paste a receipt, re-hash a deliverable,
    and get a MATCH / MISMATCH verdict plus the receipt-fingerprint check. This
@@ -156,11 +158,12 @@ was not machine-verified here — open the pages in any real browser to see them
 - [ ] Full sandbox order tested end-to-end with sandbox buyer/seller
       accounts (see NOTES.md §1)
 - [ ] Real LLM/agent loop connected, or agent framing finalized (NOTES.md §2)
-- [ ] Public repo (GitHub/GitLab/Bitbucket) containing this code + run
-      instructions; MIT `LICENSE` already included (rules require a license
-      visible at the top of the repo)
-- [ ] Hosted demo URL (optional — repo run instructions alone satisfy the
-      rules; hosting strengthens it)
+- [x] Public repo (GitHub/GitLab/Bitbucket) containing this code + run
+      instructions: https://github.com/Nenzy10/proofreceipt-checkout —
+      MIT `LICENSE` included (rules require a license visible at the top of
+      the repo)
+- [x] Hosted demo URL: https://proofreceipt-checkout.netlify.app
+      (deployed 2026-10-24; keep it up through the judging period)
 - [ ] Devpost project description: features, how it works, Tools field naming
       the AI tool/model and PayPal tech used
 - [ ] "Significant update" explanation for building on ProofReceipt (rules
