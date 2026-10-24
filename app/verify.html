@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ProofReceipt Checkout — 3. Verify a receipt</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header>
+  <h1>ProofReceipt Checkout</h1>
+  <p>Independent verification: re-hash the deliverable and compare it to the receipt. Runs entirely in your browser.</p>
+</header>
+<nav>
+  <a href="index.html">1. Deliver &amp; receipt</a>
+  <a href="checkout.html">2. Verify &amp; pay</a>
+  <a href="verify.html" class="active">3. Verify a receipt</a>
+</nav>
+<main>
+  <section class="card">
+    <h2>Verify a deliverable against its receipt</h2>
+    <label for="receiptInput">Receipt JSON (paste, or use the one from Step 1)</label>
+    <textarea id="receiptInput" placeholder='{"app":"ProofReceipt Checkout", ...}'></textarea>
+    <div class="row">
+      <button class="secondary" id="loadStored">Load receipt from Step 1</button>
+    </div>
+    <label for="vcontent">Deliverable content (text)</label>
+    <textarea id="vcontent"></textarea>
+    <label for="vfile">…or choose the delivered file instead</label>
+    <input type="file" id="vfile">
+    <div class="row">
+      <button id="verifyBtn">Re-hash &amp; compare</button>
+    </div>
+    <div id="verdict" style="margin-top:14px;"></div>
+  </section>
+</main>
+<script src="receipt.js"></script>
+<script>
+(function () {
+  document.getElementById('loadStored').addEventListener('click', function () {
+    var r = PRC.loadReceipt();
+    document.getElementById('receiptInput').value = r ? JSON.stringify(r, null, 2) : '';
+    if (!r) document.getElementById('verdict').innerHTML = '<p class="muted">No stored receipt in this browser yet — generate one in Step 1 or paste receipt JSON.</p>';
+  });
+
+  document.getElementById('verifyBtn').addEventListener('click', async function () {
+    var verdict = document.getElementById('verdict');
+    var receipt;
+    try {
+      receipt = JSON.parse(document.getElementById('receiptInput').value);
+    } catch (e) {
+      verdict.innerHTML = '<p class="mismatch">Receipt JSON could not be parsed.</p>';
+      return;
+    }
+    var file = document.getElementById('vfile').files[0];
+    var buffer;
+    if (file) buffer = await file.arrayBuffer();
+    else buffer = new TextEncoder().encode(document.getElementById('vcontent').value).buffer;
+
+    var actual = await PRC.sha256Hex(buffer);
+    var hashMatch = actual === receipt.contentSha256;
+    var fpValid = await PRC.receiptFingerprintValid(receipt);
+
+    verdict.innerHTML =
+      '<p class="' + (hashMatch ? 'match' : 'mismatch') + '">' +
+      (hashMatch ? '✓ MATCH — this deliverable is byte-identical to the one the receipt was issued for.'
+                 : '✗ MISMATCH — this content does NOT match the receipt. Do not pay against it.') + '</p>' +
+      '<p class="muted">Recomputed SHA-256:</p><div class="hash">' + actual + '</div>' +
+      '<p class="muted">Receipt metadata fingerprint: ' + (fpValid ? '<span class="match">valid (receipt fields untampered)</span>' : '<span class="mismatch">INVALID (receipt fields were altered)</span>') + '</p>';
+  });
+})();
+</script>
+</body>
+</html>

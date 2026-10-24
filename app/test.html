@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ProofReceipt Checkout — self-test</title>
+</head>
+<body>
+<h1>Self-test</h1>
+<pre id="results">running…</pre>
+<script src="receipt.js"></script>
+<script>
+(function () {
+  var lines = [];
+  function check(name, cond) { lines.push((cond ? 'PASS' : 'FAIL') + ' ' + name); return cond; }
+
+  (async function () {
+    var allOk = true;
+    // 1. Known SHA-256 test vector: sha256("abc")
+    var h = await PRC.sha256Hex('abc');
+    allOk = check('sha256("abc") matches published test vector',
+      h === 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad') && allOk;
+
+    // 2. Receipt build + fingerprint self-validates
+    var r = await PRC.buildReceipt({
+      deliverableTitle: 'Self-test deliverable', producer: 'SelfTest',
+      amountUSD: '12.00', contentSha256: h, sizeBytes: 3,
+      createdAt: '2026-10-24T00:00:00.000Z'
+    });
+    allOk = check('receiptId derived from hash', r.receiptId === 'PRC-BA7816BF8F01') && allOk;
+    allOk = check('receipt fingerprint validates', await PRC.receiptFingerprintValid(r)) && allOk;
+
+    // 3. Tampered receipt fails fingerprint validation
+    var tampered = JSON.parse(JSON.stringify(r)); tampered.amountUSD = '12000.00';
+    allOk = check('tampered receipt fails fingerprint validation', !(await PRC.receiptFingerprintValid(tampered))) && allOk;
+
+    // 4. Content verification: identical content matches, altered content does not
+    var same = await PRC.sha256Hex('abc');
+    var diff = await PRC.sha256Hex('abd');
+    allOk = check('identical content matches receipt hash', same === r.contentSha256) && allOk;
+    allOk = check('altered content mismatches receipt hash', diff !== r.contentSha256) && allOk;
+
+    lines.push(allOk ? 'SELFTEST: ALL PASS' : 'SELFTEST: FAILURES PRESENT');
+    document.getElementById('results').textContent = lines.join('\n');
+    document.title = allOk ? 'SELFTEST PASS' : 'SELFTEST FAIL';
+  })();
+})();
+</script>
+</body>
+</html>

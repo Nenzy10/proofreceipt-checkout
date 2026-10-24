@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ProofReceipt Checkout — 2. Verify &amp; pay</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header>
+  <h1>ProofReceipt Checkout</h1>
+  <p>Buyer checkout: the delivery receipt is presented and verified <strong>before</strong> payment. PayPal <strong>sandbox/demo only</strong>.</p>
+</header>
+<nav>
+  <a href="index.html">1. Deliver &amp; receipt</a>
+  <a href="checkout.html" class="active">2. Verify &amp; pay</a>
+  <a href="verify.html">3. Verify a receipt</a>
+</nav>
+<main>
+  <div class="banner demo">SANDBOX — The PayPal buttons below load the PayPal JS SDK with the project's real PayPal <strong>sandbox</strong> app client-id (app: "ProofReceipt checkout", created 2026-10-24). Sandbox only: no real money moves, and the client-id is public by design in JS SDK integrations. The app Secret is not in this page or repo.</div>
+
+  <section class="card">
+    <h2>Delivery receipt presented with this payment</h2>
+    <div id="receiptArea"><p class="muted">Loading receipt…</p></div>
+    <p class="muted">Check this hash against the deliverable you received (re-hash it yourself on the <a href="verify.html">Verify page</a>). Payment stays locked until you confirm the match — that is the whole point of ProofReceipt Checkout.</p>
+    <label style="display:flex; gap:8px; align-items:flex-start; font-weight:600;">
+      <input type="checkbox" id="verifiedBox" style="margin-top:3px;">
+      <span>I verified the SHA-256 hash above matches the deliverable I received.</span>
+    </label>
+  </section>
+
+  <section class="card">
+    <h2>Pay with PayPal (sandbox)</h2>
+    <div id="paypal-button-container"></div>
+    <div id="sdkFallback" hidden>
+      <p class="mismatch">PayPal SDK could not be loaded in this environment (offline or headless).</p>
+      <p class="muted">With an internet connection, the live sandbox buttons render here. For flow demonstration only, you can use the clearly-labeled simulated button:</p>
+      <button class="secondary" id="simulateBtn">Simulate sandbox payment (NOT a real PayPal payment)</button>
+    </div>
+    <div id="payResult"></div>
+  </section>
+</main>
+<script src="receipt.js"></script>
+<script>
+(function () {
+  var SAMPLE = null; // built below if no stored receipt exists
+  var receipt = PRC.loadReceipt();
+  var area = document.getElementById('receiptArea');
+  var box = document.getElementById('verifiedBox');
+
+  function renderReceipt(r, isSample) {
+    area.innerHTML =
+      (isSample ? '<p class="mismatch">SAMPLE RECEIPT (no receipt was generated in this browser yet — go to Step 1, or this sample shows the layout).</p>' : '') +
+      '<p><strong>' + r.deliverableTitle + '</strong> — produced by ' + r.producer + '<br>' +
+      'Receipt <strong>' + r.receiptId + '</strong> · Amount due: <strong>USD ' + r.amountUSD + '</strong></p>' +
+      '<p class="muted">SHA-256 of the deliverable:</p><div class="hash">' + r.contentSha256 + '</div>';
+  }
+
+  async function init() {
+    if (!receipt) {
+      var h = await PRC.sha256Hex('Sample deliverable content for layout demonstration.');
+      SAMPLE = await PRC.buildReceipt({
+        deliverableTitle: 'Sample deliverable (layout only)',
+        producer: 'Demo',
+        amountUSD: '10.00',
+        contentSha256: h,
+        sizeBytes: 48
+      });
+      receipt = SAMPLE;
+      renderReceipt(receipt, true);
+    } else {
+      renderReceipt(receipt, false);
+      var ok = await PRC.receiptFingerprintValid(receipt);
+      if (!ok) {
+        area.innerHTML += '<p class="mismatch">Warning: this receipt\'s metadata fingerprint does not validate — its fields were altered after generation. Do not pay against it.</p>';
+        box.disabled = true;
+      }
+    }
+  }
+
+  function showPaid(simulated, orderId) {
+    document.getElementById('payResult').innerHTML =
+      '<p class="match">' + (simulated ? 'SIMULATED payment complete (demo only — no PayPal transaction occurred).' : 'Sandbox payment approved (demo).') + '</p>' +
+      '<p class="muted">Bound to receipt ' + receipt.receiptId + ' · SHA-256 ' + receipt.contentSha256.slice(0, 16) + '… · Order ref: ' + orderId + '. In the full build, capture happens via the PayPal Orders API in sandbox and the receipt ID is stored as the order\'s custom_id.</p>';
+  }
+
+  // Payment controls stay locked until the buyer confirms the hash match.
+  var container = document.getElementById('paypal-button-container');
+  container.style.opacity = '0.4';
+  container.style.pointerEvents = 'none';
+  box.addEventListener('change', function () {
+    container.style.opacity = box.checked ? '1' : '0.4';
+    container.style.pointerEvents = box.checked ? 'auto' : 'none';
+  });
+
+  // PayPal JS SDK with the project's real SANDBOX app client-id
+  // (app "ProofReceipt checkout", sandbox mode, created 2026-10-24).
+  // Client IDs are public in JS SDK integrations; the Secret never goes here.
+  var sdkLoaded = new Promise(function (resolve) {
+    var s = document.createElement('script');
+    s.src = 'https://www.paypal.com/sdk/js?client-id=BAAZvTMXSzFxwii2nlAlmok4y1Ln4vwYG2fKHdYWluL0zQOXkZCulVaJH9aL8MxZW--b3zNkxD53B3Yo_c&currency=USD';
+    s.onload = function () { resolve(true); };
+    s.onerror = function () { resolve(false); };
+    document.head.appendChild(s);
+    setTimeout(function () { resolve(!!window.paypal); }, 6000);
+  });
+
+  sdkLoaded.then(function (ok) {
+    if (ok && window.paypal && window.paypal.Buttons) {
+      window.paypal.Buttons({
+        createOrder: function (data, actions) {
+          return actions.order.create({
+            purchase_units: [{
+              amount: { value: receipt.amountUSD },
+              custom_id: receipt.receiptId,
+              description: 'ProofReceipt Checkout — ' + receipt.deliverableTitle
+            }]
+          });
+        },
+        onApprove: function (data) { showPaid(false, data.orderID || 'SANDBOX-DEMO'); },
+        onError: function () {
+          document.getElementById('payResult').innerHTML =
+            '<p class="muted">The sandbox flow did not complete in this environment. The receipt-gated layout above is the deliverable of this prototype; a full sandbox order can be run from the hosted demo with a sandbox buyer account.</p>';
+        }
+      }).render('#paypal-button-container');
+    } else {
+      document.getElementById('sdkFallback').hidden = false;
+    }
+  });
+
+  document.getElementById('simulateBtn').addEventListener('click', function () {
+    if (!box.checked) { alert('Confirm the hash verification checkbox first — payment is gated on verification.'); return; }
+    showPaid(true, 'SIMULATED-' + receipt.receiptId);
+  });
+
+  init();
+})();
+</script>
+</body>
+</html>

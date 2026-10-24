@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ProofReceipt Checkout — 1. Deliver</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header>
+  <h1>ProofReceipt Checkout</h1>
+  <p>Verifiable SHA-256 delivery receipts inside an agentic commerce payment flow. Prototype — PayPal <strong>sandbox/demo only</strong>, no real money.</p>
+</header>
+<nav>
+  <a href="index.html" class="active">1. Deliver &amp; receipt</a>
+  <a href="checkout.html">2. Verify &amp; pay</a>
+  <a href="verify.html">3. Verify a receipt</a>
+</nav>
+<main>
+  <div class="banner demo">DEMO BUILD — This prototype extends ProofReceipt (proofreceipt.netlify.app). Hashing happens locally in your browser; nothing is uploaded anywhere.</div>
+
+  <section class="card">
+    <h2>Step 1 — Deliverable intake</h2>
+    <p class="muted">An AI agent (or freelancer) finishes a deliverable. Paste its text or choose the delivered file; the receipt binds the exact bytes to the payment.</p>
+    <label for="title">Deliverable title</label>
+    <input type="text" id="title" value="Market research brief — Q4 competitor scan">
+    <label for="producer">Producer (agent or freelancer)</label>
+    <input type="text" id="producer" value="ResearchAgent-7 (demo agent)">
+    <label for="amount">Agreed price (USD)</label>
+    <input type="number" id="amount" value="75.00" min="0" step="0.01">
+    <label for="content">Deliverable content (text)</label>
+    <textarea id="content">Competitor scan complete: 14 vendors profiled, pricing tables extracted, 3 positioning gaps identified. Full brief attached as delivered.</textarea>
+    <label for="file">…or choose the delivered file instead</label>
+    <input type="file" id="file">
+    <div class="row">
+      <button id="generate">Generate SHA-256 receipt</button>
+    </div>
+  </section>
+
+  <section class="card" id="receiptCard" hidden>
+    <h2>Delivery receipt</h2>
+    <p class="muted">SHA-256 of the deliverable content:</p>
+    <div class="hash" id="hashOut"></div>
+    <pre id="receiptJson"></pre>
+    <p class="muted" id="agentSummary"></p>
+    <div class="row">
+      <button class="secondary" id="copyReceipt">Copy receipt JSON</button>
+      <button class="secondary" id="downloadReceipt">Download receipt JSON</button>
+      <button id="toCheckout">Proceed to checkout →</button>
+    </div>
+  </section>
+</main>
+<script src="receipt.js"></script>
+<script>
+(function () {
+  var currentReceipt = null;
+
+  async function readContent() {
+    var file = document.getElementById('file').files[0];
+    if (file) {
+      return { buffer: await file.arrayBuffer(), size: file.size };
+    }
+    var text = document.getElementById('content').value;
+    var enc = new TextEncoder().encode(text);
+    return { buffer: enc.buffer, size: enc.byteLength };
+  }
+
+  document.getElementById('generate').addEventListener('click', async function () {
+    var content = await readContent();
+    var hash = await PRC.sha256Hex(content.buffer);
+    currentReceipt = await PRC.buildReceipt({
+      deliverableTitle: document.getElementById('title').value,
+      producer: document.getElementById('producer').value,
+      amountUSD: parseFloat(document.getElementById('amount').value || '0').toFixed(2),
+      contentSha256: hash,
+      sizeBytes: content.size
+    });
+    PRC.saveReceipt(currentReceipt);
+    document.getElementById('hashOut').textContent = hash;
+    document.getElementById('receiptJson').textContent = JSON.stringify(currentReceipt, null, 2);
+    document.getElementById('agentSummary').textContent = PRC.summarizeDelivery(currentReceipt);
+    document.getElementById('receiptCard').hidden = false;
+  });
+
+  document.getElementById('copyReceipt').addEventListener('click', function () {
+    if (currentReceipt) navigator.clipboard.writeText(JSON.stringify(currentReceipt, null, 2));
+  });
+
+  document.getElementById('downloadReceipt').addEventListener('click', function () {
+    if (!currentReceipt) return;
+    var blob = new Blob([JSON.stringify(currentReceipt, null, 2)], { type: 'application/json' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = currentReceipt.receiptId + '.receipt.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+
+  document.getElementById('toCheckout').addEventListener('click', function () {
+    if (currentReceipt) window.location.href = 'checkout.html';
+  });
+})();
+</script>
+</body>
+</html>
